@@ -9,9 +9,17 @@ from keras.preprocessing.image import load_img, save_img, img_to_array, array_to
 import cv2
 #import os
 
+#coding: UTF-8
+
+#----------------------------ToDo----------------------------
+#学習曲線の出力に対応させる必要
+#評価と試験に対応させる必要
+#重みデータの保存が必要（ロードも）
+#experimental_programで用いられるcommon_toolsのcollect_countを見なおしたほうがよい
+#------------------------------------------------------------
+
 from tqdm import tqdm
 from tensorflow.python.keras import Input
-#from tensorflow.python.keras.layers import Flatten, Dense, Activation, Dropout
 from tensorflow.python.keras.applications.vgg16 import VGG16
 from tensorflow.python.keras.models import Model, Sequential
 from tensorflow.python.keras.losses import binary_crossentropy
@@ -23,28 +31,16 @@ import common_tools
 import tensorflow_computer_vision_tools
 import dataset_loader
 import gain
+import experimental_program
 
-my_common_tools = common_tools.tools()
-my_cv_tools = tensorflow_computer_vision_tools.computer_vision_tools()
-dataset = dataset_loader.load(base_path = '/home/kai/anolis/dataset/npy_dataset_0/')
-
-gain = gain.load(training_mode = False, Dropout_rate = 0.5)
-target = gain.set_stream(stream = 'stream_ext')
-
-
-#クラス切り替え用
-def choice_class_num(class_label):
-    if class_label[0][0] == 1 :return 0
-    return 1
-
-'''
 #環境設定
 #os.environ["CUDA_VISIBLE_DEVICES"]="1"
+
+stream = 'S_cl, S_self and S_ext'
 epochs = 50
 batch_size = 1
 
-Objective_Lext = tf.train.AdamOptimizer(learning_rate = 1.0e-8).minimize(Lext) #gain-> Lext, no gain-> Lcl
-#Objective_Lext = tf.train.GradientDescentOptimizer(learning_rate = 1.0e-8).minimize(Lext)
+exp_program = experimental_program.Set(stream = stream, training_mode = True, Dropout_rate = 0.5, learning_rate = 1.0e-8, dataset_rate = 0.8)
 
 sess = K.get_session()
 saver = tf.train.Saver(max_to_keep = None)
@@ -53,6 +49,11 @@ uninitialized_variables = [v for v in tf.global_variables() if not hasattr(v, '_
 sess.run(tf.variables_initializer(uninitialized_variables))
 sess.run(tf.initializers.local_variables())
 
+#バッチ学習に対応させるのであれば、損失関数及びデータ分けに変更が必要である
+exp_program.Train(epochs = epochs, batch_size = batch_size)
+
+
+'''
 process_list = list(range(0, int(len(train_X) / batch_size)))
 process_list_valid = list(range(0, int(len(valid_X) / batch_size)))
 process_list_test = list(range(0, len(test_X)))
@@ -75,8 +76,9 @@ if len(process_list_for_Se) == 0: process_list_for_Se = process_list_for_Scl[:]
 process_list_for_Se_resized = process_list_for_Se * (int(len(process_list_for_Scl) / len(process_list_for_Se)) + 1)
 process_list_for_Se = [process_list_for_Se_resized[idx_num] for idx_num, element in enumerate(process_list_for_Scl)]
 print(len(process_list_for_Scl), len(process_list_for_Se))
+'''
 
-
+'''
 #minibatch
 #saver.restore(sess, '/media/kai/4tb/ckpt_data/'+ str(11) +'/my_model' + str(11) + '.ckpt')
 #saver.save(sess, 'ckpt_data/default_weights/my_model.ckpt')

@@ -7,24 +7,6 @@ class tools():
     def __init__ (self):
         pass
 
-    #stream ext用のデータ再構築関数
-    def make_access_list_for_stream_ext(self, access_list, percent = 0.5):
-        def access_list_divider(self, access_list, per = 0.5):
-            self.range0 = 0
-            self.range1 = int(len(access_list) * per)
-            self.range2 = len(access_list)
-            self.access_list_for_first = access_list[self.range0 : self.range1]
-            self.access_list_for_second = access_list[self.range1 : self.range2]
-            print('first data size: ' + str(len(self.access_list_for_first)) + ', second data size: ' + str(len(self.access_list_for_second)))
-            return self.access_list_for_first, self.access_list_for_second
-
-        self.anolis_only_list, self.others_only_list = access_list_divider(access_list, per = 0.5)
-        self.anolis_list_for_Lself, self.anolis_list_for_Lext = access_list_divider(self.anolis_only_list, per = percent)
-        self.others_list_for_Lself, self.others_list_for_Lext = access_list_divider(self.others_only_list, per = percent)
-        self.anolis_list_for_Lself.extend(self.others_list_for_Lself)
-        #anolis_list_for_Lext.extend(others_list_for_Lext)
-        return self.anolis_list_for_Lself, self.anolis_list_for_Lext   
-
     @cuda.jit
     def counter_for_IoU(self, attention_map, label_image, result):
         self.bIdx = self.cuda.blockIdx.x #batch

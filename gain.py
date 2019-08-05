@@ -95,7 +95,7 @@ class load():
         self.Lext = self.Lcl + tf.multiply(self.Lam, self.alpha) + tf.multiply(self.Le, self.omega)
         #Objective_Lext = tf.train.AdamOptimizer(learning_rate = 1.0e-8).minimize(Lext) #gain-> Lext, no gain-> Lcl
 
-    def set_stream(self, stream = 'stream_cl'):
-        if stream == 'stream_cl': return self.Lcl
-        if stream == 'stream_self': return self.Lself
-        if stream == 'stream_ext': return self.Lext
+    def set_stream(self, stream = 'S_cl'):
+        if stream == 'S_cl': return self.Lcl
+        if stream == 'S_cl and S_self': return self.Lself
+        if stream == 'S_cl, S_self and S_ext': return self.Lext
