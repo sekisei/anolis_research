@@ -1,57 +1,62 @@
-# coding: UTF-8 
-import numpy as np
-import tensorflow as tf
-from PIL import Image, ImageDraw, ImageFont
-from tensorflow.python.keras import backend as K
-from keras.applications.vgg16 import preprocess_input, decode_predictions
-import random
-from keras.preprocessing.image import load_img, save_img, img_to_array, array_to_img
-import cv2
-#import os
+# coding: UTF-8
 
-#coding: UTF-8
+#----------------------------memo----------------------------
+#学習曲線の出力に対応させたいが、SselfやSextの組み合わせのせいで正解率の評価が難しい
+#loss_sumを柔軟にしてfeed_dictもいじる？
+#Sextは交差検証に向いていない（画像ラベルを全て作る必要があるためである）
+#交差検証をするのであれば、SselfとSclの組み合わせしか選べない
+#結論：Sextではホールドアウト検証を行い、SclとSselfの組み合わせでは交差検証を行う
 
-#----------------------------ToDo----------------------------
-#学習曲線の出力に対応させる必要
-#評価と試験に対応させる必要
-#重みデータの保存が必要（ロードも）
-#experimental_programで用いられるcommon_toolsのcollect_countを見なおしたほうがよい
+#画像ラベルは植物も追加してみることにした。それでうまくいかなければ別の方法を考える。
 #------------------------------------------------------------
 
-from tqdm import tqdm
-from tensorflow.python.keras import Input
-from tensorflow.python.keras.applications.vgg16 import VGG16
-from tensorflow.python.keras.models import Model, Sequential
-from tensorflow.python.keras.losses import binary_crossentropy
+import tensorflow as tf
 
 #custom library
-#from tfGAIN_tool import get_Attention_Map, get_Heat_Map, get_Masked_img, save_imgs, resize_Attention_Map, resize_Attention_Map2, get_Masked_img_tensor
-#from general_tool import correct_count_on_batch, get_loss_on_batch, show_figure_of_history, save_history_as_txt, IoU
 import common_tools
 import tensorflow_computer_vision_tools
-import dataset_loader
-import gain
+import dataset_loader_for_K_hold_cross_validation
 import experimental_program
 
 #環境設定
 #os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
-stream = 'S_cl, S_self and S_ext'
+data_size = 48710
+stream = 'S_cl, S_self and S_ext' #3 streams: 'S_cl', 'S_cl and S_self', 'S_cl, S_self and S_ext'
 epochs = 50
-batch_size = 1
+train_batch_size = 1
+test_batch_size = 128
+data_rate = 0.8
 
-exp_program = experimental_program.Set(stream = stream, training_mode = True, Dropout_rate = 0.5, learning_rate = 1.0e-8, dataset_rate = 0.8)
+exp_program = experimental_program.Set(stream = stream, Dropout_rate = 0.5, learning_rate = 1.0e-8)
+loader = dataset_loader_for_K_hold_cross_validation.dataset_loader(base_path = '/media/kai/4tb/anolis_dataset_for_DL/')
+splitted_dataset = loader.split_list_into_K_access_list(K = 5, data_size = data_size)
 
-sess = K.get_session()
-saver = tf.train.Saver(max_to_keep = None)
-uninitialized_variables = [v for v in tf.global_variables() if not hasattr(v, '_keras_initialized') or not v._keras_initialized]
-#print(sess.run(tf.report_uninitialized_variables(tf.global_variables())))
-sess.run(tf.variables_initializer(uninitialized_variables))
-sess.run(tf.initializers.local_variables())
+for k_num in range(0, 5):
+    K_hold_access_list = loader.get_new_access_list(k_num = k_num, splitted_dataset = splitted_dataset)
+    (train_data_access_list, test_data_access_list) = (K_hold_access_list[0], K_hold_access_list[1])
 
-#バッチ学習に対応させるのであれば、損失関数及びデータ分けに変更が必要である
-exp_program.Train(epochs = epochs, batch_size = batch_size)
+    #--学習--
+    #バッチ学習に対応させるのであれば、損失関数及びデータ分けに変更が必要である
+    #access_list引数はストリームによって自動でrateが変わる
+    exp_program.Train(
+        epochs = epochs,
+        batch_size = train_batch_size,
+        save_weights = True,
+        save_default_weights = True,
+        stream = stream,
+        access_list = loader.split_access_list_for_stream_ext(access_list = train_data_access_list, rate = loader.change_data_rate(stream = stream, rate = data_rate)),
+        input_data = (loader.data_X, loader.data_Y, loader.data_img_Y)
+    )
 
+    #--試験--
+    #試験時および評価時はバッチサイズ指定可
+    #ドロップアウトは自動でオフになる
+    exp_program.Test(
+        batch_size = test_batch_size,
+        access_list_for_test = test_data_access_list,
+        input_data = (loader.data_X, loader.data_Y)
+    )
 
 '''
 process_list = list(range(0, int(len(train_X) / batch_size)))

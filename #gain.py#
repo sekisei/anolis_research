@@ -29,9 +29,9 @@ class load():
             self.layer.trainable = False #Do not change
             print(str(self.layer) + ' <- Freeze')
 
-        self.dropout_mode = tf.placeholder_with_default(True, shape = ())
+        self.dropout_mode = tf.placeholder_with_default(True, self = ())
             
-        self.x_cl = tf.placeholder(tf.float32, shape = [None, 224, 224, 3])
+        shape.x_cl = tf.placeholder(tf.float32, shape = [None, 224, 224, 3])
         self.x_masked = tf.placeholder(tf.float32, shape = [None, 224, 224, 3])
         self.x_ext = tf.placeholder(tf.float32, shape = [None, 224, 224, 3])
         self.output_cl = self.VGG16_No_Top(self.x_cl)
@@ -41,25 +41,25 @@ class load():
         with tf.variable_scope('fully_connected'):
             self.GAP_cl = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(self.output_cl)
             self.h1_cl = tf.layers.dense(self.GAP_cl, 512, activation = tf.nn.relu, name = 'dense1')
-            self.D1_cl = tf.layers.dropout(self.h1_cl, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout1')
+            self.D1_cl = tf.layers.dropout(self.h1_cl, rate = Dropout_rate, training = mode, name = 'dropout1')
             self.h2_cl = tf.layers.dense(self.D1_cl, 256, activation = tf.nn.relu, name = 'dense2')
-            self.D2_cl = tf.layers.dropout(self.h2_cl, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout2')
+            self.D2_cl = tf.layers.dropout(self.h2_cl, rate = Dropout_rate, training = mode, name = 'dropout2')
             self.VGG16_out_cl = tf.layers.dense(self.D2_cl, 1, activation = tf.nn.sigmoid, name = 'out')
 
         with tf.variable_scope('fully_connected', reuse = True):
             self.GAP_masked = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(self.output_masked)
             self.h1_masked = tf.layers.dense(self.GAP_masked, 512, activation = tf.nn.relu, name = 'dense1')
-            self.D1_masked = tf.layers.dropout(self.h1_masked, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout1')
+            self.D1_masked = tf.layers.dropout(self.h1_masked, rate = Dropout_rate, training = mode, name = 'dropout1')
             self.h2_masked = tf.layers.dense(self.D1_masked, 256, activation = tf.nn.relu, name = 'dense2')
-            self.D2_masked = tf.layers.dropout(self.h2_masked, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout2')
+            self.D2_masked = tf.layers.dropout(self.h2_masked, rate = Dropout_rate, training = mode, name = 'dropout2')
             self.VGG16_out_masked = tf.layers.dense(self.D2_masked, 1, activation = tf.nn.sigmoid, name = 'out')
 
         with tf.variable_scope('fully_connected', reuse = True):
             self.GAP_ext = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(self.output_ext)
             self.h1_ext = tf.layers.dense(self.GAP_ext, 512, activation = tf.nn.relu, name = 'dense1')
-            self.D1_ext = tf.layers.dropout(self.h1_ext, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout1')
+            self.D1_ext = tf.layers.dropout(self.h1_ext, rate = Dropout_rate, training = mode, name = 'dropout1')
             self.h2_ext = tf.layers.dense(self.D1_ext, 256, activation = tf.nn.relu, name = 'dense2')
-            self.D2_ext = tf.layers.dropout(self.h2_ext, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout2')
+            self.D2_ext = tf.layers.dropout(self.h2_ext, rate = Dropout_rate, training = mode, name = 'dropout2')
             self.VGG16_out_ext = tf.layers.dense(self.D2_ext, 1, activation = tf.nn.sigmoid, name = 'out')
 
         #以下はスコープの番号に注意

@@ -17,113 +17,35 @@ from tensorflow.python.keras.models import Model, Sequential
 from tensorflow.python.keras.losses import binary_crossentropy
 
 #custom library
-from tfGAIN_tool import get_Attention_Map, get_Heat_Map, get_Masked_img, save_imgs, resize_Attention_Map, resize_Attention_Map2, get_Masked_img_tensor
-from general_tool import correct_count_on_batch, get_loss_on_batch, show_figure_of_history, save_history_as_txt, counter_for_IoU, IoU
+#from tfGAIN_tool import get_Attention_Map, get_Heat_Map, get_Masked_img, save_imgs, resize_Attention_Map, resize_Attention_Map2, get_Masked_img_tensor
+#from general_tool import correct_count_on_batch, get_loss_on_batch, show_figure_of_history, save_history_as_txt, IoU
+import common_tools
+import tensorflow_computer_vision_tools
+import dataset_loader
+import model_loader
+
+my_common_tools = common_tools.tools()
+my_cv_tools = tensorflow_computer_vision_tools.computer_vision_tools()
+dataset = dataset_loader.load(base_path = '/home/kai/anolis/dataset/npy_dataset_0/')
+gain_model = model_loader.load(training = False, dropout_rate = 0.5)
 
 #クラス切り替え用
 def choice_class_num(class_label):
     if class_label[0][0] == 1 :return 0
     return 1
-
-#stream ext用のデータ再構築関数
-def make_access_list_for_stream_ext(access_list, percent = 0.5):
-    def access_list_divider(access_list, per = 0.5):
-        range0 = 0
-        range1 = int(len(access_list) * per)
-        range2 = len(access_list)
-        access_list_for_first = access_list[range0 : range1]
-        access_list_for_second = access_list[range1 : range2]
-        print('first data size: ' + str(len(access_list_for_first)) + ', second data size: ' + str(len(access_list_for_second)))
-        return access_list_for_first, access_list_for_second
-
-    anolis_only_list, others_only_list = access_list_divider(access_list, per = 0.5)
-    anolis_list_for_Lself, anolis_list_for_Lext = access_list_divider(anolis_only_list, per = percent)
-    others_list_for_Lself, others_list_for_Lext = access_list_divider(others_only_list, per = percent)
-    anolis_list_for_Lself.extend(others_list_for_Lself)
-    #anolis_list_for_Lext.extend(others_list_for_Lext)
-    return anolis_list_for_Lself, anolis_list_for_Lext
                                                                                     
-
 #環境設定
 #os.environ["CUDA_VISIBLE_DEVICES"]="1"
 epochs = 50
 batch_size = 1
 
-#データセットのロード
-test_num = 378
-valid_num = 5006
-train_num = 18971
-
-Label_test_shape = (test_num * 2, 224, 224, 1)
-Label_valid_shape = (valid_num * 2, 224, 224, 1)
-Label_train_shape = (train_num * 2, 224, 224, 1)
-
-Input_test_shape = (test_num * 2, 224, 224, 3)
-Input_valid_shape = (valid_num * 2, 224, 224, 3)
-Input_train_shape = (train_num * 2, 224, 224, 3)
-
-base_path = '/home/kai/anolis/dataset/npy_dataset_0/'
-
-test_X = np.memmap(base_path + 'test_X.dat', dtype = 'float16', mode = 'r', shape = Input_test_shape)
-train_X = np.memmap(base_path + 'train_X.dat', dtype = 'float16', mode = 'r', shape = Input_train_shape)
-valid_X = np.memmap(base_path + 'valid_X.dat', dtype = 'float16', mode = 'r', shape = Input_valid_shape)
-test_Y = np.memmap(base_path + 'test_Y.dat', dtype = 'float16', mode = 'r', shape = (test_num * 2))
-test_img_Y = np.memmap(base_path + 'test_img_Y.dat', dtype = 'float16', mode = 'r', shape = Label_test_shape)
-train_Y = np.memmap(base_path + 'train_Y.dat', dtype = 'float16', mode = 'r', shape = (train_num * 2))
-train_img_Y = np.memmap(base_path + 'train_img_Y.dat', dtype = 'float16', mode = 'r', shape = Label_train_shape)
-valid_Y = np.memmap(base_path + 'valid_Y.dat', dtype = 'float16', mode = 'r', shape = (valid_num * 2))
-valid_img_Y = np.memmap(base_path + 'valid_img_Y.dat', dtype = 'float16', mode = 'r', shape = Label_valid_shape)
-
-print(len(test_X))
-print(len(train_X))
-print(len(valid_X))
-
-VGG16_No_Top = tf.keras.applications.vgg16.VGG16(weights = 'imagenet', include_top = False)
-for layer in VGG16_No_Top.layers[:11]:
-    layer.trainable = False #Do not change
-    print(str(layer) + ' <- Freeze')
-    
-x_cl = tf.placeholder(tf.float32, shape = [None, 224, 224, 3])
-x_masked = tf.placeholder(tf.float32, shape = [None, 224, 224, 3])
-x_ext = tf.placeholder(tf.float32, shape = [None, 224, 224, 3])
-output_cl = VGG16_No_Top(x_cl)
-output_masked = VGG16_No_Top(x_masked)
-output_ext = VGG16_No_Top(x_ext)
-training = False
-
-#'''
-with tf.variable_scope('fully_connected'):
-    GAP_cl = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(output_cl)
-    h1_cl = tf.layers.dense(GAP_cl, 512, activation = tf.nn.relu, name = 'dense1')
-    D1_cl = tf.layers.dropout(h1_cl, rate = 0.5, training = training, name = 'dropout1')
-    h2_cl = tf.layers.dense(D1_cl, 256, activation = tf.nn.relu, name = 'dense2')
-    D2_cl = tf.layers.dropout(h2_cl, rate = 0.5, training = training, name = 'dropout2')
-    VGG16_out_cl = tf.layers.dense(D2_cl, 1, activation = tf.nn.sigmoid, name = 'out')
-
-with tf.variable_scope('fully_connected', reuse = True):
-    GAP_masked = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(output_masked)
-    h1_masked = tf.layers.dense(GAP_masked, 512, activation = tf.nn.relu, name = 'dense1')
-    D1_masked = tf.layers.dropout(h1_masked, rate = 0.5, training = training, name = 'dropout1')
-    h2_masked = tf.layers.dense(D1_masked, 256, activation = tf.nn.relu, name = 'dense2')
-    D2_masked = tf.layers.dropout(h2_masked, rate = 0.5, training = training, name = 'dropout2')
-    VGG16_out_masked = tf.layers.dense(D2_masked, 1, activation = tf.nn.sigmoid, name = 'out')
-
-with tf.variable_scope('fully_connected', reuse = True):
-    GAP_ext = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(output_ext)
-    h1_ext = tf.layers.dense(GAP_ext, 512, activation = tf.nn.relu, name = 'dense1')
-    D1_ext = tf.layers.dropout(h1_ext, rate = 0.5, training = training, name = 'dropout1')
-    h2_ext = tf.layers.dense(D1_ext, 256, activation = tf.nn.relu, name = 'dense2')
-    D2_ext = tf.layers.dropout(h2_ext, rate = 0.5, training = training, name = 'dropout2')
-    VGG16_out_ext = tf.layers.dense(D2_ext, 1, activation = tf.nn.sigmoid, name = 'out')
-#'''
-
 #以下はスコープの番号に注意
 t = tf.placeholder(tf.float32, shape = (None, 1))
 t_img = tf.placeholder(tf.float32, shape = (None, 224, 224, 1))
 #t_img_reverse = tf.placeholder(tf.float32, shape = (None, 224, 224, 1))
-y_cl = VGG16_out_cl
-y_ext = VGG16_out_ext
-y_masked = VGG16_out_masked
+y_cl = gain_model.VGG16_out_cl
+y_ext = gain_model.VGG16_out_ext
+y_masked = gain_model.VGG16_out_masked
 
 #[print(n.name) for n in tf.get_default_graph().as_graph_def().node]
 
@@ -135,13 +57,13 @@ y_ext_logits = Graph.get_tensor_by_name('fully_connected_2/out/BiasAdd:0')
 #[0][0] -> anolis, [0][1] -> others
 block5_conv3_tensor = Graph.get_tensor_by_name('vgg16/block5_conv3/Relu:0')
 block5_conv3_tensor_ext = Graph.get_tensor_by_name('vgg16/block5_conv3_2/Relu:0') 
-Attention_Map = get_Attention_Map(block5_conv3_tensor, y_cl_logits)
-Attention_Map_ext = get_Attention_Map(block5_conv3_tensor_ext, y_ext_logits)
-resized_AM = resize_Attention_Map(Attention_Map)
-resized_AM_ext = resize_Attention_Map(Attention_Map_ext)
-Masked_img = get_Masked_img_tensor(Attention_Map, x_cl)
+Attention_Map = my_cv_tools.get_Attention_Map(block5_conv3_tensor, y_cl_logits)
+Attention_Map_ext = my_cv_tools.get_Attention_Map(block5_conv3_tensor_ext, y_ext_logits)
+resized_AM = my_cv_tools.resize_Attention_Map(Attention_Map)
+resized_AM_ext = my_cv_tools.resize_Attention_Map(Attention_Map_ext)
+Masked_img = my_cv_tools.get_Masked_img_tensor(Attention_Map, gain_model.x_cl)
 (y_pred, y_label) = (y_cl, t)
-correct_counter = correct_count_on_batch(y_pred, y_label) #very slow
+correct_counter = my_common_tools.correct_count_on_batch(y_pred, y_label) #very slow
 
 Lcl = tf.nn.sigmoid_cross_entropy_with_logits(labels = t, logits = y_cl_logits)
 Lam = y_masked
@@ -150,7 +72,6 @@ alpha = tf.constant(1.0)
 omega = tf.constant(10.0)
 Lself = Lcl + tf.multiply(Lam, alpha)
 Lext = Lcl + tf.multiply(Lam, alpha) + tf.multiply(Le, omega)
-#Lext_special = Lcl + tf.multiply(Le, omega)
 Objective_Lext = tf.train.AdamOptimizer(learning_rate = 1.0e-8).minimize(Lext) #gain-> Lext, no gain-> Lcl
 #Objective_Lext = tf.train.GradientDescentOptimizer(learning_rate = 1.0e-8).minimize(Lext)
 
@@ -161,6 +82,7 @@ uninitialized_variables = [v for v in tf.global_variables() if not hasattr(v, '_
 sess.run(tf.variables_initializer(uninitialized_variables))
 sess.run(tf.initializers.local_variables())
 
+'''
 process_list = list(range(0, int(len(train_X) / batch_size)))
 process_list_valid = list(range(0, int(len(valid_X) / batch_size)))
 process_list_test = list(range(0, len(test_X)))
@@ -184,7 +106,7 @@ process_list_for_Se_resized = process_list_for_Se * (int(len(process_list_for_Sc
 process_list_for_Se = [process_list_for_Se_resized[idx_num] for idx_num, element in enumerate(process_list_for_Scl)]
 print(len(process_list_for_Scl), len(process_list_for_Se))
 
-#'''
+
 #minibatch
 #saver.restore(sess, '/media/kai/4tb/ckpt_data/'+ str(11) +'/my_model' + str(11) + '.ckpt')
 #saver.save(sess, 'ckpt_data/default_weights/my_model.ckpt')
@@ -243,9 +165,7 @@ for epoch in range(0, epochs):
     
 #save_history_as_txt(np.array(loss_list), np.array(acc_list), np.array(val_loss_list), np.array(val_acc_list), dir_path = 'hist/')
 #show_figure_of_history(np.array(loss_list), np.array(acc_list), np.array(val_loss_list), np.array(val_acc_list), dir_path = 'hist/')
-#'''
 
-'''
 #test
 saver.restore(sess, 'ckpt_data/'+ str(49) +'/my_model' + str(49) + '.ckpt')
 for idx in tqdm(process_list_test):

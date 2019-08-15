@@ -28,17 +28,17 @@ class tools():
         self.each_sum = self.counter_for_IoU[(shape[0], shape[1], shape[2]), 1](attention_map, label_image, self.result)
         return float(self.result[0]) / float(np.sum(self.result))
           
-    def get_accuracy_on_batch(self, y_pred, y_label):
-        self.Is_equal = tf.equal(tf.to_float(tf.greater(y_pred, 0.5)), tf.to_float(y_label))
-        self.accuracy = tf.reduce_mean(tf.cast(self.Is_equal, tf.float32))
-        return self.accuracy
+    #def get_accuracy_on_batch(self, y_pred, y_label):
+    #    self.Is_equal = tf.equal(tf.to_float(tf.greater(y_pred, 0.5)), tf.to_float(y_label))
+    #    self.accuracy = tf.reduce_mean(tf.cast(self.Is_equal, tf.float32))
+    #    return self.accuracy
 
-    def get_loss_on_batch(self, loss_func): return tf.reduce_mean(loss_func)
+    #def get_loss_on_batch(self, loss_func): return tf.reduce_mean(loss_func)
 
-    def correct_count_on_batch(self, y_pred, y_label):
-        self.Is_equal = tf.equal(tf.to_float(tf.greater(y_pred, 0.5)), tf.to_float(y_label))
-        self.correct_sum = tf.reduce_sum(tf.cast(self.Is_equal, tf.float32))
-        return self.correct_sum
+    #def correct_count_on_batch(self, y_pred, y_label):
+    #    self.Is_equal = tf.equal(tf.to_float(tf.greater(y_pred, 0.5)), tf.to_float(y_label))
+    #    self.correct_sum = tf.reduce_sum(tf.cast(self.Is_equal, tf.float32))
+    #    return self.correct_sum
 
     #グラフ表示
     def show_figure_of_history(self, loss, acc, val_loss, val_acc):
