@@ -29,6 +29,26 @@ train_img_Y = np.memmap(base_path_to_load + 'train_img_Y.dat', dtype = 'float16'
 valid_Y = np.memmap(base_path_to_load + 'valid_Y.dat', dtype = 'float16', mode = 'r', shape = (valid_num * 2))
 valid_img_Y = np.memmap(base_path_to_load + 'valid_img_Y.dat', dtype = 'float16', mode = 'r', shape = Label_valid_shape)
 
+anolis_test_X = 
+anolis_valid_X =
+anolis_train_X =
+others_test_X =
+others_valid_X =
+others_train_X =
+anolis_test_Y =
+anolis_valid_Y =
+anolis_train_Y =
+others_test_Y =
+others_valid_Y =
+others_train_Y =
+anolis_test_img_Y =
+anolis_valid_img_Y =
+anolis_train_img_Y =
+others_test_img_Y =
+others_valid_img_Y =
+others_train_img_Y =
+
+
 print(len(test_X))
 print(len(train_X))
 print(len(valid_X))

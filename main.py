@@ -6,11 +6,27 @@
 #Sextは交差検証に向いていない（画像ラベルを全て作る必要があるためである）
 #交差検証をするのであれば、SselfとSclの組み合わせしか選べない
 #結論：Sextではホールドアウト検証を行い、SclとSselfの組み合わせでは交差検証を行う
-
 #画像ラベルは植物も追加してみることにした。それでうまくいかなければ別の方法を考える。
+#テスト方法を改造する必要がある
 #------------------------------------------------------------
 
+#-----------------------------data-----------------------------
+#split_access_list_for_stream_extは以下のデータ構造でのみ使用可
+
+#  Data_X.dat
+#|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|ooooooooooooooooooooooooooooo|
+
+#  Data_Y.dat
+#|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|ooooooooooooooooooooooooooooo|
+
+#  Data_img_Y.dat
+#|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|          - empty -          |
+
+# a ---> anolis, o ---> others
+#--------------------------------------------------------------
+
 import tensorflow as tf
+import random
 
 #custom library
 import common_tools
@@ -21,37 +37,51 @@ import experimental_program
 #環境設定
 #os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
-data_size = 48710
-stream = 'S_cl, S_self and S_ext' #3 streams: 'S_cl', 'S_cl and S_self', 'S_cl, S_self and S_ext'
+#3 streams: 'S_cl', 'S_cl and S_self', 'S_cl, S_self and S_ext'
+stream = 'S_cl, S_self and S_ext' 
+data_size = 64840
 epochs = 50
 train_batch_size = 1
 test_batch_size = 128
-data_rate = 0.8
+data_rate = 0.9
+K = 4
 
 exp_program = experimental_program.Set(stream = stream, Dropout_rate = 0.5, learning_rate = 1.0e-8)
-loader = dataset_loader_for_K_hold_cross_validation.dataset_loader(base_path = '/media/kai/4tb/anolis_dataset_for_DL/')
-splitted_dataset = loader.split_list_into_K_access_list(K = 5, data_size = data_size)
+loader = dataset_loader_for_K_hold_cross_validation.dataset_loader(base_path = '/media/kai/4tb/anolis_dataset_for_DL/', data_size = data_size)
 
-for k_num in range(0, 5):
-    K_hold_access_list = loader.get_new_access_list(k_num = k_num, splitted_dataset = splitted_dataset)
+access_list_for_Scl_Sam, access_list_for_Se = loader.split_access_list_for_each_stream(
+        stream = stream,
+        access_list = [idx for idx in range(0, data_size)],
+        data_Y = loader.data_Y,
+        rate = loader.change_data_rate(stream = stream, rate = data_rate)
+    )
+
+splitted_dataset = loader.split_list_into_K_access_list(K = K, access_list = access_list_for_Scl_Sam, shuffle = True)
+
+for k_num in range(0, K):
+    K_hold_access_list = loader.get_new_access_list(k_num = k_num, splitted_dataset = splitted_dataset, shuffle = False)
     (train_data_access_list, test_data_access_list) = (K_hold_access_list[0], K_hold_access_list[1])
-
+    print('[Data size] Train: ' + str(len(train_data_access_list)) + ', Test: ' + str(len(test_data_access_list)))
+    
     #--学習--
     #バッチ学習に対応させるのであれば、損失関数及びデータ分けに変更が必要である
     #access_list引数はストリームによって自動でrateが変わる
+    save_default_weights = False
+    if k_num == 0: save_default_weights = True
     exp_program.Train(
         epochs = epochs,
         batch_size = train_batch_size,
         save_weights = True,
-        save_default_weights = True,
+        save_default_weights = save_default_weights,
         stream = stream,
-        access_list = loader.split_access_list_for_stream_ext(access_list = train_data_access_list, rate = loader.change_data_rate(stream = stream, rate = data_rate)),
+        access_list = (train_data_access_list, access_list_for_Se),
         input_data = (loader.data_X, loader.data_Y, loader.data_img_Y)
     )
 
     #--試験--
     #試験時および評価時はバッチサイズ指定可
     #ドロップアウトは自動でオフになる
+    #マスクつき画像
     exp_program.Test(
         batch_size = test_batch_size,
         access_list_for_test = test_data_access_list,
@@ -59,12 +89,53 @@ for k_num in range(0, 5):
     )
 
 '''
+exp_program = experimental_program.Set(stream = stream, Dropout_rate = 0.5, learning_rate = 1.0e-8)
+loader = dataset_loader_for_K_hold_cross_validation.dataset_loader(base_path = '/media/kai/4tb/anolis_dataset_for_DL/', data_size = data_size)
+splitted_dataset = loader.split_list_into_K_access_list(K = 5, data_size = data_size, shuffle = True)
+
+for k_num in range(0, 5):
+    K_hold_access_list = loader.get_new_access_list(k_num = k_num, splitted_dataset = splitted_dataset, shuffle = False)
+    (train_data_access_list, test_data_access_list) = (K_hold_access_list[0], K_hold_access_list[1])
+    print('[Data size] Train: ' + str(len(train_data_access_list)) + ', Test: ' + str(len(test_data_access_list)))
+    access_list_for_stream_ext = loader.split_access_list_for_stream_ext(
+        access_list = train_data_access_list,
+        data_Y = loader.data_Y,
+        rate = loader.change_data_rate(stream = stream, rate = data_rate)
+    )
+
+    #--学習--
+    #バッチ学習に対応させるのであれば、損失関数及びデータ分けに変更が必要である
+    #access_list引数はストリームによって自動でrateが変わる
+    save_default_weights = False
+    if k_num == 0: save_default_weights = True
+    exp_program.Train(
+        epochs = epochs,
+        batch_size = train_batch_size,
+        save_weights = True,
+        save_default_weights = save_default_weights,
+        stream = stream,
+        access_list = access_list_for_stream_ext,
+        input_data = (loader.data_X, loader.data_Y, loader.data_img_Y)
+    )
+
+    #--試験--
+    #試験時および評価時はバッチサイズ指定可
+    #ドロップアウトは自動でオフになる
+    #マスクつき画像
+    exp_program.Test(
+        batch_size = test_batch_size,
+        access_list_for_test = test_data_access_list,
+        input_data = (loader.data_X, loader.data_Y)
+    )
+'''
+
+'''
 process_list = list(range(0, int(len(train_X) / batch_size)))
 process_list_valid = list(range(0, int(len(valid_X) / batch_size)))
 process_list_test = list(range(0, len(test_X)))
 correct_list = np.zeros(shape = (int(len(train_X) / batch_size)))
 correct_list_valid = np.zeros(shape = (int(len(valid_X) / batch_size)))
-correct_list_test = np.zeros(shape = len(test_X))
+ correct_list_test = np.zeros(shape = len(test_X))
 each_loss_list = np.zeros(shape = (int(len(train_X) / batch_size), 1))
 each_loss_list_valid = np.zeros(shape = (int(len(valid_X) / batch_size), 1))
 each_loss_list_test = np.zeros(shape = (len(test_X), 1))

@@ -60,20 +60,12 @@ class Set():
             self.Y_batch = self.Y_batch.reshape((len(self.Y_batch), 1))
             self.sum_list.append(self.correct_sum.eval(session = self.sess, feed_dict = {self.gain.dropout_mode: dropout_mode, self.gain.x_cl: self.X_batch, self.gain.t: self.Y_batch}))
             self.loss_list.append(self.loss_sum.eval(session = self.sess, feed_dict = {self.gain.dropout_mode: dropout_mode, self.gain.x_cl: self.X_batch, self.gain.t: self.Y_batch}))
-
+            
         self.acc_list_on_epoch[mode].append(sum(self.sum_list) / len(access_list))
         self.loss_list_on_epoch[mode].append(sum(self.loss_list) / len(access_list))
         print(self.acc_list_on_epoch)
         print(self.loss_list_on_epoch)
-
-    def Test(self, batch_size = 1, access_list_for_test = None, input_data = None):
-        (self.test_X, self.test_Y) = (input_data[0], input_data[1])
-        self.result_processing(dropout_mode = False, mode = 'test', batch_size = batch_size, access_list = access_list_for_test, data_X = self.test_X, data_Y = self.test_Y)
-
-    #def Valid(self, valid_X = None, valid_Y = None):
-    #    self.access_list_for_valid = [self.valid_data_idx for self.valid_data_idx in range(0, len(valid_X))]
-    #    self.result_processing(mode = 'valid', batch_size = self.valid_batch_size, access_list = self.access_list_for_valid, data_X = valid_X, data_Y = valid_Y)
-        
+       
     #Scl, Sself, Sextで学習方法を分割
     def Train(self, epochs = 50, batch_size = 1, save_weights = True, save_default_weights = True, stream = None, access_list = None, input_data = None):
         (self.train_X, self.train_Y, self.train_img_Y) = (input_data[0], input_data[1], input_data[2])
@@ -86,6 +78,7 @@ class Set():
 
         if stream == 'S_cl':
             for self.epoch in range(0, epochs):
+                print('epoch: ' + str(self.epoch))
                 if save_weights == True: self.saver.save(self.sess, self.path_to_weights(self.epoch))
                 random.shuffle(self.access_list_for_Scl)
                 for self.idx_Scl in tqdm(self.access_list_for_Scl):
@@ -95,6 +88,7 @@ class Set():
 
         if stream == 'S_cl and S_self':
             for self.epoch in range(0, epochs):
+                print('epoch: ' + str(self.epoch))
                 if save_weights == True: self.saver.save(self.sess, self.path_to_weights(self.epoch))
                 random.shuffle(self.access_list_for_Scl)
                 for self.idx_Scl in tqdm(self.access_list_for_Scl):
@@ -105,6 +99,7 @@ class Set():
 
         if stream == 'S_cl, S_self and S_ext':
             for self.epoch in range(0, epochs):
+                print('epoch: ' + str(self.epoch))
                 if save_weights == True: self.saver.save(self.sess, self.path_to_weights(self.epoch))
                 random.shuffle(self.access_list_for_Scl)
                 random.shuffle(self.access_list_for_Se)
@@ -123,6 +118,38 @@ class Set():
                     }
                     self.sess.run(self.target, feed_dict = self.feed_dict)
         
-                        
+        
+    def Test(self, batch_size = 1, access_list_for_test = None, input_data = None):
+        (self.test_X, self.test_Y) = (input_data[0], input_data[1])
+        self.result_processing(dropout_mode = False, mode = 'test', batch_size = batch_size, access_list = access_list_for_test, data_X = self.test_X, data_Y = self.test_Y)
+
+    #マスク付き画像データ用のテストメソッドがあると便利かも
+    #あと、メソッド内のテンソルはgainモジュール内で書いたほうがいい。無駄にテンソルが増える可能性がある。
+    def Test_on_masking_data(self, batch_size = 1, access_list_for_test = None, input_data = None):
+        (self.test_X, self.test_Y) = (input_data[0], input_data[1])
+        def result_processing_on_masking_data(dropout_mode = None, mode = None, batch_size = 1, access_list = None, data_X = None, data_Y = None):
+            print('Calclating loss and acc. [mode: ' + mode + ']')
+            #count correct on batch for acc
+            Is_equal = tf.equal(tf.to_float(tf.greater(self.gain.y_cl, 0.5)), tf.to_float(self.gain.t))
+            correct_sum = tf.reduce_sum(tf.cast(self.Is_equal, tf.float32))
+            loss_sum = tf.reduce_sum(self.gain.Lcl) #テスト時はLcl(Stream classificationの損失関数)のみ扱う
+            
+            self.sum_list = []
+            self.loss_list = []
+            
+            self.access_list_on_batch = [self.idx for self.idx in range(0, int(math.ceil(float(len(access_list)) / float(batch_size))))]
+            for self.idx in tqdm(self.access_list_on_batch):
+                self.X_batch = data_X[self.idx * batch_size : (self.idx + 1) * batch_size]
+                self.Y_batch = data_Y[self.idx * batch_size : (self.idx + 1) * batch_size]
+                self.Y_batch = self.Y_batch.reshape((len(self.Y_batch), 1))
+                self.sum_list.append(self.correct_sum.eval(session = self.sess, feed_dict = {self.gain.dropout_mode: dropout_mode, self.gain.x_cl: self.X_batch, self.gain.t: self.Y_batch}))
+                self.loss_list.append(self.loss_sum.eval(session = self.sess, feed_dict = {self.gain.dropout_mode: dropout_mode, self.gain.x_cl: self.X_batch, self.gain.t: self.Y_batch}))
+
+                self.acc_list_on_epoch[mode].append(sum(self.sum_list) / len(access_list))
+                self.loss_list_on_epoch[mode].append(sum(self.loss_list) / len(access_list))
+                print(self.acc_list_on_epoch)
+                print(self.loss_list_on_epoch)
+                
+        self.result_processing_on_masking_data(dropout_mode = False, mode = 'test', batch_size = batch_size, access_list = access_list_for_test, data_X = self.test_X, data_Y = self.test_Y)
 
 
