@@ -27,6 +27,7 @@
 
 import tensorflow as tf
 import random
+import numpy as np
 
 #custom library
 import common_tools
@@ -34,19 +35,24 @@ import tensorflow_computer_vision_tools
 import dataset_loader_for_K_hold_cross_validation
 import experimental_program
 
+#temp use
+from keras.preprocessing.image import load_img, save_img, img_to_array, array_to_img  
+
 #環境設定
 #os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 #3 streams: 'S_cl', 'S_cl and S_self', 'S_cl, S_self and S_ext'
-stream = 'S_cl, S_self and S_ext' 
+stream = 'S_cl, S_self and S_ext'
+#stream = 'S_cl' 
 data_size = 64840
 epochs = 50
 train_batch_size = 1
-test_batch_size = 128
-data_rate = 0.9
+test_batch_size = 32
+data_rate = 0.95
 K = 4
 
-exp_program = experimental_program.Set(stream = stream, Dropout_rate = 0.5, learning_rate = 1.0e-8)
+tool = common_tools.tools()
+exp_program = experimental_program.Set(stream = stream, Dropout_rate = 0.3, learning_rate = 1.0e-8)
 loader = dataset_loader_for_K_hold_cross_validation.dataset_loader(base_path = '/media/kai/4tb/anolis_dataset_for_DL/', data_size = data_size)
 
 access_list_for_Scl_Sam, access_list_for_Se = loader.split_access_list_for_each_stream(
@@ -56,19 +62,33 @@ access_list_for_Scl_Sam, access_list_for_Se = loader.split_access_list_for_each_
         rate = loader.change_data_rate(stream = stream, rate = data_rate)
     )
 
+#print('Scl_Scm')
+#print(access_list_for_Scl_Sam)
+#for i in range(32419, 32439): print(loader.data_Y[i])
+#print('Se')
+#print(access_list_for_Se)
+
 splitted_dataset = loader.split_list_into_K_access_list(K = K, access_list = access_list_for_Scl_Sam, shuffle = True)
+
+#print('plitted')
+#for i in range(0, len(splitted_dataset)):
+#    print('')
+#    print(splitted_dataset[i])
 
 for k_num in range(0, K):
     K_hold_access_list = loader.get_new_access_list(k_num = k_num, splitted_dataset = splitted_dataset, shuffle = False)
     (train_data_access_list, test_data_access_list) = (K_hold_access_list[0], K_hold_access_list[1])
     print('[Data size] Train: ' + str(len(train_data_access_list)) + ', Test: ' + str(len(test_data_access_list)))
+
+    exp_program.saver.restore(exp_program.sess, '/media/kai/4tb/ckpt_data/default_weights/my_model.ckpt')
     
+    '''
     #--学習--
     #バッチ学習に対応させるのであれば、損失関数及びデータ分けに変更が必要である
     #access_list引数はストリームによって自動でrateが変わる
     save_default_weights = False
     if k_num == 0: save_default_weights = True
-    exp_program.Train(
+    hist = exp_program.Train(
         epochs = epochs,
         batch_size = train_batch_size,
         save_weights = True,
@@ -77,16 +97,25 @@ for k_num in range(0, K):
         access_list = (train_data_access_list, access_list_for_Se),
         input_data = (loader.data_X, loader.data_Y, loader.data_img_Y)
     )
-
+    tool.save_history_as_txt(acc = np.array(hist['acc']), loss = np.array(hist['loss']), iou_acc = np.array(hist['iou']), dir_path = '')
+    '''
+    
     #--試験--
     #試験時および評価時はバッチサイズ指定可
     #ドロップアウトは自動でオフになる
-    #マスクつき画像
     exp_program.Test(
         batch_size = test_batch_size,
         access_list_for_test = test_data_access_list,
         input_data = (loader.data_X, loader.data_Y)
     )
+
+    #マスク付き画像でのテスト
+    exp_program.Test(
+        batch_size = test_batch_size,
+        access_list_for_test = test_data_access_list,
+        input_data = (loader.data_X_mask, loader.data_Y)
+    )
+    #'''
 
 '''
 exp_program = experimental_program.Set(stream = stream, Dropout_rate = 0.5, learning_rate = 1.0e-8)
@@ -220,6 +249,7 @@ for idx in tqdm(process_list_test):
     class_num = 1
     test_X_batch = test_X[idx : (idx + 1)]
     test_Y_batch = test_Y[idx : (idx + 1)].reshape((1, 1))
+    
     #マスク付きテスト用画像作成 (トカゲのみ対象の処理)
     if idx < int(len(process_list_test) / 2): 
         test_Y_img_batch = test_img_Y[idx : (idx + 1)]

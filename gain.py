@@ -24,8 +24,10 @@ class load():
 
         self.my_cv_tools = tensorflow_computer_vision_tools.computer_vision_tools()
 
+        #GAINの準備
         self.VGG16_No_Top = tf.keras.applications.vgg16.VGG16(weights = 'imagenet', include_top = False)
-        for self.layer in self.VGG16_No_Top.layers[:11]:
+
+        for self.layer in self.VGG16_No_Top.layers[:15]: #11 <-- default
             self.layer.trainable = False #Do not change
             print(str(self.layer) + ' <- Freeze')
 
@@ -62,7 +64,6 @@ class load():
             self.D2_ext = tf.layers.dropout(self.h2_ext, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout2')
             self.VGG16_out_ext = tf.layers.dense(self.D2_ext, 1, activation = tf.nn.sigmoid, name = 'out')
 
-        #以下はスコープの番号に注意
         self.t = tf.placeholder(tf.float32, shape = (None, 1))
         self.t_img = tf.placeholder(tf.float32, shape = (None, 224, 224, 1))
         #t_img_reverse = tf.placeholder(tf.float32, shape = (None, 224, 224, 1))
@@ -72,12 +73,13 @@ class load():
 
         #[print(n.name) for n in tf.get_default_graph().as_graph_def().node]
 
+        #attention map, masking imageの準備
+        #以下はスコープの番号に注意
         self.Graph = tf.get_default_graph()
         self.y_cl_logits = self.Graph.get_tensor_by_name('fully_connected/out/BiasAdd:0')
         self.y_masked_logits = self.Graph.get_tensor_by_name('fully_connected_1/out/BiasAdd:0') #Not to be used
         self.y_ext_logits = self.Graph.get_tensor_by_name('fully_connected_2/out/BiasAdd:0')
 
-        #[0][0] -> anolis, [0][1] -> others
         self.block5_conv3_tensor = self.Graph.get_tensor_by_name('vgg16/block5_conv3/Relu:0')
         self.block5_conv3_tensor_ext = self.Graph.get_tensor_by_name('vgg16/block5_conv3_2/Relu:0') 
         self.Attention_Map = self.my_cv_tools.get_Attention_Map(self.block5_conv3_tensor, self.y_cl_logits)
@@ -86,8 +88,8 @@ class load():
         self.resized_AM_ext = self.my_cv_tools.resize_Attention_Map(self.Attention_Map_ext)
         self.Masked_img = self.my_cv_tools.get_Masked_img_tensor(self.Attention_Map, self.x_cl)
         (self.y_pred, self.y_label) = (self.y_cl, self.t)
-        #correct_counter = correct_count_on_batch(y_pred, y_label) #very slow
 
+        #損失関数の設定
         self.Lcl = tf.nn.sigmoid_cross_entropy_with_logits(labels = self.t, logits = self.y_cl_logits)
         self.Lam = self.y_masked
         self.Le = tf.square(self.resized_AM_ext - self.t_img)
@@ -95,8 +97,27 @@ class load():
         self.omega = tf.constant(10.0)
         self.Lself = self.Lcl + tf.multiply(self.Lam, self.alpha)
         self.Lext = self.Lcl + tf.multiply(self.Lam, self.alpha) + tf.multiply(self.Le, self.omega)
-        #Objective_Lext = tf.train.AdamOptimizer(learning_rate = 1.0e-8).minimize(Lext) #gain-> Lext, no gain-> Lcl
 
+        #Accと各Loss総計
+        self.Is_equal = tf.equal(tf.to_float(tf.greater(self.y_cl, 0.5)), tf.to_float(self.t))
+        self.correct_sum = tf.reduce_sum(tf.cast(self.Is_equal, tf.float32))
+        self.loss_sum_Lcl = tf.reduce_sum(self.Lcl)
+        self.loss_sum_Lself = tf.reduce_sum(self.Lself)
+        self.loss_sum_Lext = tf.reduce_sum(self.Lext)
+
+        #IoU
+        self.AM_max = tf.reduce_max(self.resized_AM_ext)
+        self.AM_norm = tf.divide(self.resized_AM_ext, self.AM_max)
+        self.AM_gray_img = tf.multiply(self.AM_norm, 255.0)
+        
+        self.mul = tf.multiply(self.t_img, self.AM_gray_img)
+        
+        self.TP  = tf.reduce_sum(tf.to_float(tf.greater(self.mul, 255.0*255.0)))
+        self.FP_TP_FN = (
+            tf.reduce_sum(tf.to_float(tf.equal(self.t_img, 255.0))) + tf.reduce_sum(tf.to_float(tf.equal(self.AM_gray_img, 255.0))) - self.TP
+        )
+        self.IoU = tf.divide(self.TP, self.FP_TP_FN)
+        
     def set_stream(self, stream = 'S_cl'):
         if stream == 'S_cl': return self.Lcl
         if stream == 'S_cl and S_self': return self.Lself

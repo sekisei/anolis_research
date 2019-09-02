@@ -10,9 +10,10 @@ class dataset_loader():
         self.label_data_shape = (self.data_size)
         self.img_label_data_shape = (int(self.data_size / 2), 224, 224, 1)
 
-        self.data_X = np.memmap(base_path + 'Data_X.dat', dtype = 'float16', mode = 'r', shape = self.input_data_shape)
-        self.data_Y = np.memmap(base_path + 'Data_Y.dat', dtype = 'float16', mode = 'r', shape = self.label_data_shape)
-        self.data_img_Y = np.memmap(base_path + 'Data_img_Y.dat', dtype = 'float16', mode = 'r', shape = self.img_label_data_shape)
+        self.data_X = np.memmap(base_path + 'data_X.dat', dtype = 'float16', mode = 'r', shape = self.input_data_shape)
+        self.data_Y = np.memmap(base_path + 'data_Y.dat', dtype = 'float16', mode = 'r', shape = self.label_data_shape)
+        self.data_img_Y = np.memmap(base_path + 'data_img_Y.dat', dtype = 'float16', mode = 'r', shape = self.img_label_data_shape)
+        self.data_X_mask = np.memmap(base_path + 'data_X_masking.dat', dtype = 'float16', mode = 'r', shape = self.input_data_shape)
 
         self.dataset = {'data_X': self.data_X, 'data_Y': self.data_Y, 'data_img_Y': self.data_img_Y}
 

@@ -5,7 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 from tensorflow.python.keras import backend as K
 from keras.applications.vgg16 import preprocess_input, decode_predictions
 import random
-from keras.preprocessing.image import load_img, img_to_array, array_to_img
+from keras.preprocessing.image import load_img, img_to_array, array_to_img, save_img
 import cv2
 from tqdm import tqdm
 from tensorflow.python.keras import Input
@@ -80,15 +80,10 @@ class computer_vision_tools():
         self.sigmoid_output = tf.divide(tf.constant(1.0), tf.constant(1.0) + tf.exp(tf.negative(self.adjusted_att_map)))
         self.Ic = tf.subtract(target, tf.multiply(self.sigmoid_output, target))
         return self.Ic
-
-    '''
-    def save_imgs(Heat_Map, Ic, target, idx = 0, dir_path = '', name_numbering = 0):
-        self.Heat_Map = (np.float32(Heat_Map[idx])  + target[idx].reshape((224, 224, 3)) / 2.0)
+    
+    def save_AM(self, Heat_Map = None, target = None, dir_path = '', name_numbering = 0):
+        self.Heat_Map = (np.float32(Heat_Map)  + target.reshape((224, 224, 3)) / 2.0)
         self.Heat_Map_img = array_to_img(self.Heat_Map)
-        self.Ic = np.float32(Ic[idx])
-        self.Ic_img = array_to_img(Ic)
-        #Heat_Map_img.show()
-        self.Heat_Map_img.save(dir_path + 'Attention_Map_' + str(name_numbering)+ '.png')
-        self.Ic_img.save(dir_path + 'MASK_' + str(name_numbering)+ '.png')
+        save_img(dir_path + 'Attention_Map_' + str(name_numbering)+ '.png', self.Heat_Map_img)
         return
-    '''
+    

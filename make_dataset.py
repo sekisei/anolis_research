@@ -2,6 +2,7 @@ import numpy as np
 import glob
 from PIL import Image
 from tqdm import tqdm
+from keras.preprocessing.image import load_img, save_img, img_to_array, array_to_img
 
 base_path = '/media/kai/4tb/'
 save_path = '/media/kai/4tb/anolis_dataset_for_DL/'
@@ -48,16 +49,49 @@ def make_dataset(file_list_dict = None, path = None):
     others_class_Label = np.array([0 for index in range(0, int(all_data_X_size / 2))])
     anolis_class_Label = np.array([1 for index in range(0, int(all_data_X_size / 2))])
 
-    for idx, file_name in tqdm(enumerate(file_list_dict['x_file_list'])):
+    #'''
+    for idx, file_name in enumerate(tqdm(file_list_dict['x_file_list'])):
         mem_X[idx] = np.array(Image.open(file_name)).reshape((224, 224, 3))
     mem_X.flush()
 
-    for idx, file_name in tqdm(enumerate(file_list_dict['pos_img_label_file_list'])):
+    for idx, file_name in enumerate(tqdm(file_list_dict['pos_img_label_file_list'])):
         mem_img_Y[idx] = np.array(Image.open(file_name)).reshape((224, 224, 1))
     mem_img_Y.flush()
 
     mem_Y[:] = np.hstack((anolis_class_Label, others_class_Label)).reshape((all_data_X_size, 1))[:]
     mem_Y.flush()
+    #'''
+
+def make_dataset_with_mask(file_list_dict = None, path = None):
+    all_data_X_size = len(file_list_dict['x_file_list'])
+
+    #マスク付きテスト用画像作成 (トカゲのみ対象の処理)
+    def img_masking(imgs = None):
+        (X, Y_img) = (imgs[0], imgs[1])
+        #画素値の反転
+        Y_img_reverse = np.abs(Y_img - Y_img.max())
+        Y_img_reverse = Y_img_reverse / Y_img_reverse.max()
+        X_masking = (Y_img_reverse * X).astype(np.int)
+        return X_masking  
+
+    mem_X = np.memmap(path + 'data_X.dat', dtype = 'float16', mode = 'r', shape = (all_data_X_size, 224, 224, 3))
+    mem_X_mask = np.memmap(path + 'data_X_masking.dat', dtype = 'float16', mode = 'w+', shape = (all_data_X_size, 224, 224, 3))
+    mem_img_Y = np.memmap(path + 'data_img_Y.dat', dtype = 'float16', mode = 'r', shape = (int(all_data_X_size / 2), 224, 224, 1))
+
+    #マスク付き画像の保存
+    for idx, file_name in enumerate(tqdm(file_list_dict['x_file_list'])):
+        mem_X_mask[idx] = np.array(Image.open(file_name)).reshape((224, 224, 3))
+    mem_X_mask.flush()
+    
+    for idx in tqdm(range(0, int(all_data_X_size / 2))):
+        X_mask = img_masking(imgs = (mem_X[idx], mem_img_Y[idx]))
+        mem_X_mask[idx] = X_mask
+
+    mem_X_mask.flush()
+
+    save_img('0.png', mem_X_mask[0])
+    save_img('32419.png', mem_X_mask[32419])
+    save_img('32420.png', mem_X_mask[32420])
 
 pos_test_file_list = get_positive_file_list(path = targets_test_base_path)
 pos_valid_file_list = get_positive_file_list(path = targets_valid_base_path)
@@ -85,4 +119,5 @@ file_list_dict = {
 }
 
 #print(pos_file_list)
-make_dataset(file_list_dict = file_list_dict, path = save_path)
+#make_dataset(file_list_dict = file_list_dict, path = save_path)
+make_dataset_with_mask(file_list_dict = file_list_dict, path = save_path)
