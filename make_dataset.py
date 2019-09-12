@@ -39,6 +39,75 @@ def get_negative_file_list(path = None):
     print(len(file_list))
     return file_list
 
+def make_X(file_list = None, save_path = None):
+    all_data_size = len(file_list[0])
+    mem_X = np.memmap(save_path + 'data_X.dat', dtype = 'float16', mode = 'w+', shape = (all_data_size, 224, 224, 3))
+    for idx, (pos_file_name, neg_file_name) in enumerate(tqdm(zip(file_list[0], file_list[1]))):
+        mem_X[2 * idx] = np.array(Image.open(pos_file_name)).reshape((224, 224, 3))
+        mem_X[2 * idx + 1] = np.array(Image.open(neg_file_name)).reshape((224, 224, 3))
+    mem_X.flush()
+
+def make_Y(data_size = None, save_path = None):
+    mem_Y = np.memmap(save_path + 'data_Y.dat', dtype = 'float16', mode = 'w+', shape = (data_size, 1))    
+    for idx in range(0, int(data_size / 2)):
+        mem_Y[2 * idx] = 1
+        mem_Y[2 * idx + 1] = 0
+    mem_Y.flush()
+
+def make_Y_img(file_list = None, save_path = None):
+    data_size = len(file_list) * 2
+    mem_Y_img = np.memmap(save_path + 'data_Y_img.dat', dtype = 'float16', mode = 'w+', shape = (data_size, 224, 224, 1))
+    for idx, file_name in enumerate(tqdm(file_list)):
+        mem_Y_img[2 * idx] = np.array(Image.open(file_name)).reshape((224, 224, 1))
+        mem_Y_img[2 * idx + 1] = np.zeros((224, 224, 1))
+    mem_Y_img.flush()
+
+pos_test_file_list = get_positive_file_list(path = targets_test_base_path)
+pos_valid_file_list = get_positive_file_list(path = targets_valid_base_path)
+pos_train_file_list = get_positive_file_list(path = targets_train_base_path)
+neg_test_file_list = get_negative_file_list(path = others_test_base_path)
+neg_valid_file_list = get_negative_file_list(path = others_valid_base_path)
+neg_train_file_list = get_negative_file_list(path = others_train_base_path)
+
+all_pos_X_file_list = []
+all_neg_X_file_list = []
+all_Yimg_file_list = []
+all_pos_X_file_list.extend(pos_test_file_list['Input_file_list'])
+all_pos_X_file_list.extend(pos_valid_file_list['Input_file_list'])
+all_pos_X_file_list.extend(pos_train_file_list['Input_file_list'])
+all_neg_X_file_list.extend(neg_test_file_list)
+all_neg_X_file_list.extend(neg_valid_file_list)
+all_neg_X_file_list.extend(neg_train_file_list)
+all_Yimg_file_list.extend(pos_test_file_list['Label_file_list'])
+all_Yimg_file_list.extend(pos_valid_file_list['Label_file_list'])
+all_Yimg_file_list.extend(pos_train_file_list['Label_file_list'])
+
+all_data_size = len(all_pos_X_file_list) + len(all_neg_X_file_list)
+mem_X = np.memmap(save_path + 'data_X.dat', dtype = 'float16', mode = 'w+', shape = (all_data_size, 224, 224, 3))
+mem_Y = np.memmap(save_path + 'data_Y.dat', dtype = 'float16', mode = 'w+', shape = (all_data_size, 1))
+mem_Y_img = np.memmap(save_path + 'data_Y_img.dat', dtype = 'float16', mode = 'w+', shape = (all_data_size, 224, 224, 1))
+
+for idx, (pos_file_name, neg_file_name, img_label_file_name) in enumerate(tqdm(zip(all_pos_X_file_list, all_neg_X_file_list, all_Yimg_file_list))):
+    mem_X[2 * idx] = np.array(Image.open(pos_file_name)).reshape((224, 224, 3))
+    mem_X[2 * idx + 1] = np.array(Image.open(neg_file_name)).reshape((224, 224, 3))
+    mem_Y[2 * idx] = 1
+    mem_Y[2 * idx + 1] = 0
+    mem_Y_img[2 * idx] = np.array(Image.open(img_label_file_name)).reshape((224, 224, 1))
+    mem_Y_img[2 * idx + 1] = np.zeros((224, 224, 1))
+
+mem_X.flush()
+mem_Y.flush()
+mem_Y_img.flush()
+
+print(mem_X.shape)
+print(mem_Y.shape)
+print(mem_Y_img.shape)
+
+#save_img('1.png', mem_X[1])
+#save_img('1_Y.png', mem_Y_img[1])
+#print(mem_Y[1])
+    
+'''
 def make_dataset(file_list_dict = None, path = None):
     all_data_X_size = len(file_list_dict['x_file_list'])
 
@@ -49,7 +118,6 @@ def make_dataset(file_list_dict = None, path = None):
     others_class_Label = np.array([0 for index in range(0, int(all_data_X_size / 2))])
     anolis_class_Label = np.array([1 for index in range(0, int(all_data_X_size / 2))])
 
-    #'''
     for idx, file_name in enumerate(tqdm(file_list_dict['x_file_list'])):
         mem_X[idx] = np.array(Image.open(file_name)).reshape((224, 224, 3))
     mem_X.flush()
@@ -60,8 +128,7 @@ def make_dataset(file_list_dict = None, path = None):
 
     mem_Y[:] = np.hstack((anolis_class_Label, others_class_Label)).reshape((all_data_X_size, 1))[:]
     mem_Y.flush()
-    #'''
-
+    
 def make_dataset_with_mask(file_list_dict = None, path = None):
     all_data_X_size = len(file_list_dict['x_file_list'])
 
@@ -89,9 +156,9 @@ def make_dataset_with_mask(file_list_dict = None, path = None):
 
     mem_X_mask.flush()
 
-    save_img('0.png', mem_X_mask[0])
-    save_img('32419.png', mem_X_mask[32419])
-    save_img('32420.png', mem_X_mask[32420])
+    #save_img('0.png', mem_X_mask[0])
+    #save_img('32419.png', mem_X_mask[32419])
+    #save_img('32420.png', mem_X_mask[32420])
 
 pos_test_file_list = get_positive_file_list(path = targets_test_base_path)
 pos_valid_file_list = get_positive_file_list(path = targets_valid_base_path)
@@ -99,7 +166,7 @@ pos_train_file_list = get_positive_file_list(path = targets_train_base_path)
 neg_test_file_list = get_negative_file_list(path = others_test_base_path)
 neg_valid_file_list = get_negative_file_list(path = others_valid_base_path)
 neg_train_file_list = get_negative_file_list(path = others_train_base_path)
-
+    
 pos_test_file_list['Input_file_list'].extend(pos_valid_file_list['Input_file_list'])
 pos_test_file_list['Input_file_list'].extend(pos_train_file_list['Input_file_list'])
 neg_test_file_list.extend(neg_valid_file_list)
@@ -120,4 +187,5 @@ file_list_dict = {
 
 #print(pos_file_list)
 #make_dataset(file_list_dict = file_list_dict, path = save_path)
-make_dataset_with_mask(file_list_dict = file_list_dict, path = save_path)
+#make_dataset_with_mask(file_list_dict = file_list_dict, path = save_path)
+'''

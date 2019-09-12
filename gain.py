@@ -20,14 +20,14 @@ from tensorflow.python.keras.losses import binary_crossentropy
 import tensorflow_computer_vision_tools
 
 class load():
-    def __init__ (self, Dropout_rate = 0.5):
+    def __init__ (self):
 
         self.my_cv_tools = tensorflow_computer_vision_tools.computer_vision_tools()
 
         #GAINの準備
         self.VGG16_No_Top = tf.keras.applications.vgg16.VGG16(weights = 'imagenet', include_top = False)
 
-        for self.layer in self.VGG16_No_Top.layers[:15]: #11 <-- default
+        for self.layer in self.VGG16_No_Top.layers[:11]: #11 <-- default
             self.layer.trainable = False #Do not change
             print(str(self.layer) + ' <- Freeze')
 
@@ -43,29 +43,30 @@ class load():
         with tf.variable_scope('fully_connected'):
             self.GAP_cl = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(self.output_cl)
             self.h1_cl = tf.layers.dense(self.GAP_cl, 512, activation = tf.nn.relu, name = 'dense1')
-            self.D1_cl = tf.layers.dropout(self.h1_cl, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout1')
+            self.D1_cl = tf.layers.dropout(self.h1_cl, rate = 0.5, training = self.dropout_mode, name = 'dropout1')
             self.h2_cl = tf.layers.dense(self.D1_cl, 256, activation = tf.nn.relu, name = 'dense2')
-            self.D2_cl = tf.layers.dropout(self.h2_cl, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout2')
+            self.D2_cl = tf.layers.dropout(self.h2_cl, rate = 0.5, training = self.dropout_mode, name = 'dropout2')
             self.VGG16_out_cl = tf.layers.dense(self.D2_cl, 1, activation = tf.nn.sigmoid, name = 'out')
 
         with tf.variable_scope('fully_connected', reuse = True):
             self.GAP_masked = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(self.output_masked)
             self.h1_masked = tf.layers.dense(self.GAP_masked, 512, activation = tf.nn.relu, name = 'dense1')
-            self.D1_masked = tf.layers.dropout(self.h1_masked, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout1')
+            self.D1_masked = tf.layers.dropout(self.h1_masked, rate = 0.5, training = self.dropout_mode, name = 'dropout1')
             self.h2_masked = tf.layers.dense(self.D1_masked, 256, activation = tf.nn.relu, name = 'dense2')
-            self.D2_masked = tf.layers.dropout(self.h2_masked, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout2')
+            self.D2_masked = tf.layers.dropout(self.h2_masked, rate = 0.5, training = self.dropout_mode, name = 'dropout2')
             self.VGG16_out_masked = tf.layers.dense(self.D2_masked, 1, activation = tf.nn.sigmoid, name = 'out')
 
         with tf.variable_scope('fully_connected', reuse = True):
             self.GAP_ext = tf.keras.layers.GlobalAveragePooling2D(name = 'avg_pool')(self.output_ext)
             self.h1_ext = tf.layers.dense(self.GAP_ext, 512, activation = tf.nn.relu, name = 'dense1')
-            self.D1_ext = tf.layers.dropout(self.h1_ext, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout1')
+            self.D1_ext = tf.layers.dropout(self.h1_ext, rate = 0.5, training = self.dropout_mode, name = 'dropout1')
             self.h2_ext = tf.layers.dense(self.D1_ext, 256, activation = tf.nn.relu, name = 'dense2')
-            self.D2_ext = tf.layers.dropout(self.h2_ext, rate = Dropout_rate, training = self.dropout_mode, name = 'dropout2')
+            self.D2_ext = tf.layers.dropout(self.h2_ext, rate = 0.5, training = self.dropout_mode, name = 'dropout2')
             self.VGG16_out_ext = tf.layers.dense(self.D2_ext, 1, activation = tf.nn.sigmoid, name = 'out')
 
         self.t = tf.placeholder(tf.float32, shape = (None, 1))
         self.t_img = tf.placeholder(tf.float32, shape = (None, 224, 224, 1))
+        self.t_img_for_IoU = tf.placeholder(tf.float32, shape = (None, 224, 224, 1))
         #t_img_reverse = tf.placeholder(tf.float32, shape = (None, 224, 224, 1))
         self.y_cl = self.VGG16_out_cl
         self.y_ext = self.VGG16_out_ext
@@ -90,9 +91,9 @@ class load():
         (self.y_pred, self.y_label) = (self.y_cl, self.t)
 
         #損失関数の設定
-        self.Lcl = tf.nn.sigmoid_cross_entropy_with_logits(labels = self.t, logits = self.y_cl_logits)
-        self.Lam = self.y_masked
-        self.Le = tf.square(self.resized_AM_ext - self.t_img)
+        self.Lcl = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels = self.t, logits = self.y_cl_logits))
+        self.Lam = tf.reduce_sum(self.y_masked)
+        self.Le = tf.reduce_sum(tf.square(self.resized_AM_ext - self.t_img))
         self.alpha = tf.constant(1.0)
         self.omega = tf.constant(10.0)
         self.Lself = self.Lcl + tf.multiply(self.Lam, self.alpha)
@@ -106,19 +107,18 @@ class load():
         self.loss_sum_Lext = tf.reduce_sum(self.Lext)
 
         #IoU
-        self.AM_max = tf.reduce_max(self.resized_AM_ext)
-        self.AM_norm = tf.divide(self.resized_AM_ext, self.AM_max)
-        self.AM_gray_img = tf.multiply(self.AM_norm, 255.0)
-        
-        self.mul = tf.multiply(self.t_img, self.AM_gray_img)
-        
-        self.TP  = tf.reduce_sum(tf.to_float(tf.greater(self.mul, 255.0*255.0)))
+        self.AM_max = tf.reduce_max(self.resized_AM, axis = [1, 2, 3])
+        self.AM_max_expanded = tf.expand_dims(tf.expand_dims(tf.expand_dims(self.AM_max, 1), 1), 1)
+        self.AM_norm = tf.divide(self.resized_AM, self.AM_max_expanded)
+        self.t_img_norm = tf.divide(self.t_img_for_IoU, 255.0)
+        self.mul = tf.multiply(self.t_img_norm, self.AM_norm)
+        self.TP  = tf.reduce_sum(tf.to_float(tf.greater(self.mul, 0.5)), axis = [1, 2, 3])
         self.FP_TP_FN = (
-            tf.reduce_sum(tf.to_float(tf.equal(self.t_img, 255.0))) + tf.reduce_sum(tf.to_float(tf.equal(self.AM_gray_img, 255.0))) - self.TP
+            tf.reduce_sum(tf.to_float(tf.equal(self.t_img_norm, 1.0)), axis = [1, 2, 3]) + tf.reduce_sum(tf.to_float(tf.greater(self.AM_norm, 0.5)), axis = [1, 2, 3]) - self.TP
         )
-        self.IoU = tf.divide(self.TP, self.FP_TP_FN)
+        self.IoU = tf.reduce_sum(tf.divide(self.TP, self.FP_TP_FN))
         
     def set_stream(self, stream = 'S_cl'):
         if stream == 'S_cl': return self.Lcl
-        if stream == 'S_cl and S_self': return self.Lself
-        if stream == 'S_cl, S_self and S_ext': return self.Lext
+        if stream == 'S_cl and S_am': return self.Lself
+        if stream == 'S_cl, S_am and S_e': return self.Lext
